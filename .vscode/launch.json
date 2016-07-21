@@ -12,6 +12,16 @@
 			"sourceMaps": true,
 			"outDir": "${workspaceRoot}/src",
 			"preLaunchTask": "npm"
-		}
+		},
+        {
+            "name": "Launch Tests",
+            "type": "extensionHost",
+            "request": "launch",
+            "runtimeExecutable": "${execPath}",
+            "args": ["${workspaceRoot}/test/workspace", "--extensionDevelopmentPath=${workspaceRoot}", "--extensionTestsPath=${workspaceRoot}/test" ],
+            "stopOnEntry": false,
+			"sourceMaps": true,
+			"preLaunchTask": "npm"
+        }
 	]
 }

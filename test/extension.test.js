@@ -26,8 +26,10 @@ var myExtension = proxyquire('../src/extension',{
 	open: link => extensionStubs.open(link)
 });
 
+const absPath = (file) => join(workspace.rootPath, file);
+
 function openEditor(file, lineNumber) {
-	return workspace.openTextDocument(join(workspace.rootPath, file)).then(doc => {
+	return workspace.openTextDocument(absPath(file)).then(doc => {
 		return window.showTextDocument(doc).then((editor) => {
 			var line = new Position(lineNumber - 1,0);
 			editor.selection = new Selection(line, line);			
@@ -38,21 +40,30 @@ function openEditor(file, lineNumber) {
 var providers = [
 	{
 		folder: 'github',
-		url: (file, line) => `https://github.com/user/repo-name/blob/test-master/${file}#L${line}`
+		lineUrl: (file, line) => `https://github.com/user/repo-name/blob/test-master/${file}#L${line}`,
+		fileUrl: (file) => `https://github.com/user/repo-name/blob/test-master/${file}`,
+		repoUrl: () => `https://github.com/user/repo-name/tree/test-master`
 	},
 	{
 		folder: 'bitbucket',
-		url: (file, line) => `https://bitbucket.org/user/repo-name/src/test-master/${file}#cl-${line}`
+		lineUrl: (file, line) => `https://bitbucket.org/user/repo-name/src/test-master/${file}#cl-${line}`,
+		fileUrl: (file) => `https://bitbucket.org/user/repo-name/src/test-master/${file}`,
 	}
 ];
 
 // Defines a Mocha test suite to group tests of similar kind together
 // https://github.com/Microsoft/vscode/blob/master/extensions/vscode-api-tests/src/editor.test.ts
 providers.forEach(function(provider) {
+	var file = `${provider.folder}/file1.txt`;
+
 	suite(`Extension Tests - ${provider.folder}`, function() {
 
 		suiteSetup(function(done){
-			fs.rename(join(workspace.rootPath, `./${provider.folder}/.gitted`), join(workspace.rootPath, '.git'), done);		
+			fs.unlink(absPath('.git'), (err) => done());		
+		});
+
+		suiteSetup(function(done){
+			fs.link(absPath(`./${provider.folder}/.gitted`), absPath('.git'), done);		
 		});
 
 		setup(function(){
@@ -65,15 +76,14 @@ providers.forEach(function(provider) {
 		teardown(cleanUp);
 
 		suiteTeardown(function (done) {
-			fs.rename(join(workspace.rootPath, '.git'), join(workspace.rootPath, `./${provider.folder}/.gitted`), done);				
+			fs.unlink(absPath('.git'), done);				
 		})
 
-		test('Run copyGitHubLinkToClipboard command', (done) => {
+		test('Run copyGitHubLinkToClipboard command on open file', (done) => {
 			var line = 3;
-			var file = `${provider.folder}/file1.txt`;
 			openEditor(`./${file}`, line).then(() => {
 				extensionStubs.copy = function(link) {
-					assert.equal(link, provider.url(file, line));
+					assert.equal(link, provider.lineUrl(file, line));
 					done();
 				}
 				extensionStubs.open = () => done(new Error('Open must not be called'));
@@ -82,17 +92,66 @@ providers.forEach(function(provider) {
 			});
 		});	
 
-		test('Run openInGitHub command', (done) => {
+		test('Run copyGitHubLinkToClipboard command on empty editor', (done) => {
+			//Only implemented for Github so far
+			if (!provider.repoUrl) return done();
+
+			extensionStubs.copy = function(link) {
+				assert.equal(link, provider.repoUrl());
+				done();
+			}
+			extensionStubs.open = () => done(new Error('Open must not be called'));
+
+			commands.executeCommand('extension.copyGitHubLinkToClipboard');
+		});	
+
+		test('Run copyGitHubLinkToClipboard command on menu context', (done) => {
+			extensionStubs.copy = function(link) {
+				assert.equal(link, provider.fileUrl(file));
+				done();
+			}
+			extensionStubs.open = () => done(new Error('Open must not be called'));
+
+			commands.executeCommand('extension.copyGitHubLinkToClipboard', {
+				fsPath: absPath(file)
+			});
+		});			
+
+		test('Run openInGitHub command on open file', (done) => {
 			var line = 2;
-			var file = `${provider.folder}/file1.txt`;
 			openEditor(`./${file}`, line).then(() => {
 				extensionStubs.open = function(link) {
-					assert.equal(link, provider.url(file, line));
+					assert.equal(link, provider.lineUrl(file, line));
 					done();
 				}
 				extensionStubs.copy = () => done(new Error('Copy must not be called'));
 
 				commands.executeCommand('extension.openInGitHub');
+			});
+		});
+
+		test('Run openInGitHub command on empty editor', (done) => {
+			//Only implemented for Github so far
+			if (!provider.repoUrl) return done();
+
+			extensionStubs.open = function(link) {
+				assert.equal(link, provider.repoUrl());
+				done();
+			}
+			extensionStubs.copy = () => done(new Error('Copy must not be called'));
+
+			commands.executeCommand('extension.openInGitHub');
+		});
+
+		test('Run openInGitHub command on menu context', (done) => {
+			extensionStubs.open = function(link) {
+				assert.equal(link, provider.fileUrl(file));
+				done();
+			}
+			extensionStubs.copy = () => done(new Error('Copy must not be called'));
+
+			commands.executeCommand('extension.openInGitHub', {
+				fsPath: absPath(file)
 			});
 		});
 	});		

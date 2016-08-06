@@ -1,25 +1,16 @@
 /* global suite, test */
+// Based on https://github.com/Microsoft/vscode/blob/master/extensions/vscode-api-tests/src/editor.test.ts
 
-//
-// Note: This example test is leveraging the Mocha test framework.
-// Please refer to their documentation on https://mochajs.org/ for help.
-//
+const assert = require('assert');
+const fs = require('fs');
 
-// The module 'assert' provides assertion methods from node
-var assert = require('assert');
+const {commands, workspace, window, Position, Selection} = require('vscode');
+const {cleanUp} = require('./utils');
+const {join} = require('path');
 
-var proxyquire = require('proxyquire');
-var fs = require('fs');
-
-// You can import and use all API from the 'vscode' module
-// as well as import your extension to test it
-var {commands, workspace, window, Position, Range, Selection} = require('vscode');
-var {createRandomFile, deleteFile, cleanUp, pathEquals} = require('./utils');
-var {join} = require('path');
-
-
+const proxyquire = require('proxyquire');
 var extensionStubs = {};
-var myExtension = proxyquire('../src/extension',{
+const myExtension = proxyquire('../src/extension',{
 	'copy-paste': {
 		copy: link => extensionStubs.copy(link),
 	},
@@ -31,13 +22,20 @@ const absPath = (file) => join(workspace.rootPath, file);
 function openEditor(file, lineNumber) {
 	return workspace.openTextDocument(absPath(file)).then(doc => {
 		return window.showTextDocument(doc).then((editor) => {
-			var line = new Position(lineNumber - 1,0);
+			const line = new Position(lineNumber - 1,0);
 			editor.selection = new Selection(line, line);			
 		});
 	});	
 }
 
-var providers = [
+function expectedLink(expected, cb) {
+	return (actual) => {
+		assert.equal(actual, expected);
+		cb();	
+	}
+}
+
+const providers = [
 	{
 		folder: 'github',
 		lineUrl: (file, line) => `https://github.com/user/repo-name/blob/test-master/${file}#L${line}`,
@@ -58,10 +56,8 @@ var providers = [
 	}
 ];
 
-// Defines a Mocha test suite to group tests of similar kind together
-// https://github.com/Microsoft/vscode/blob/master/extensions/vscode-api-tests/src/editor.test.ts
 providers.forEach(function(provider) {
-	var file = `${provider.folder}/file1.txt`;
+	const file = `${provider.folder}/file1.txt`;
 
 	suite(`Extension Tests - ${provider.folder}`, function() {
 
@@ -87,12 +83,9 @@ providers.forEach(function(provider) {
 		})
 
 		test('Run copyGitHubLinkToClipboard command on open file', (done) => {
-			var line = 3;
+			const line = 3;
 			openEditor(`./${file}`, line).then(() => {
-				extensionStubs.copy = function(link) {
-					assert.equal(link, provider.lineUrl(file, line));
-					done();
-				}
+				extensionStubs.copy = expectedLink(provider.lineUrl(file, line), done);
 				extensionStubs.open = () => done(new Error('Open must not be called'));
 
 				commands.executeCommand('extension.copyGitHubLinkToClipboard');
@@ -100,20 +93,14 @@ providers.forEach(function(provider) {
 		});	
 
 		test('Run copyGitHubLinkToClipboard command on empty editor', (done) => {
-			extensionStubs.copy = function(link) {
-				assert.equal(link, provider.repoUrl());
-				done();
-			}
+			extensionStubs.copy = expectedLink(provider.repoUrl(), done);
 			extensionStubs.open = () => done(new Error('Open must not be called'));
 
 			commands.executeCommand('extension.copyGitHubLinkToClipboard');
 		});	
 
 		test('Run copyGitHubLinkToClipboard command on menu context', (done) => {
-			extensionStubs.copy = function(link) {
-				assert.equal(link, provider.fileUrl(file));
-				done();
-			}
+			extensionStubs.copy = expectedLink(provider.fileUrl(file), done);
 			extensionStubs.open = () => done(new Error('Open must not be called'));
 
 			commands.executeCommand('extension.copyGitHubLinkToClipboard', {
@@ -122,12 +109,9 @@ providers.forEach(function(provider) {
 		});			
 
 		test('Run openInGitHub command on open file', (done) => {
-			var line = 2;
+			const line = 2;
 			openEditor(`./${file}`, line).then(() => {
-				extensionStubs.open = function(link) {
-					assert.equal(link, provider.lineUrl(file, line));
-					done();
-				}
+				extensionStubs.open = expectedLink(provider.lineUrl(file, line), done);
 				extensionStubs.copy = () => done(new Error('Copy must not be called'));
 
 				commands.executeCommand('extension.openInGitHub');
@@ -135,6 +119,7 @@ providers.forEach(function(provider) {
 		});
 
 		test('Run openInGitHub command on empty editor', (done) => {
+			extensionStubs.open = expectedLink(provider.repoUrl(), done);
 			extensionStubs.open = function(link) {
 				assert.equal(link, provider.repoUrl());
 				done();
@@ -145,10 +130,7 @@ providers.forEach(function(provider) {
 		});
 
 		test('Run openInGitHub command on menu context', (done) => {
-			extensionStubs.open = function(link) {
-				assert.equal(link, provider.fileUrl(file));
-				done();
-			}
+			extensionStubs.open = expectedLink(provider.fileUrl(file), done);
 			extensionStubs.copy = () => done(new Error('Copy must not be called'));
 
 			commands.executeCommand('extension.openInGitHub', {

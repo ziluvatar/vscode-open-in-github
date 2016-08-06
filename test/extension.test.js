@@ -100,9 +100,6 @@ providers.forEach(function(provider) {
 		});	
 
 		test('Run copyGitHubLinkToClipboard command on empty editor', (done) => {
-			//Only implemented for Github so far
-			if (!provider.repoUrl) return done();
-
 			extensionStubs.copy = function(link) {
 				assert.equal(link, provider.repoUrl());
 				done();
@@ -138,9 +135,6 @@ providers.forEach(function(provider) {
 		});
 
 		test('Run openInGitHub command on empty editor', (done) => {
-			//Only implemented for Github so far
-			if (!provider.repoUrl) return done();
-
 			extensionStubs.open = function(link) {
 				assert.equal(link, provider.repoUrl());
 				done();

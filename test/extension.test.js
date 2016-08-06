@@ -48,6 +48,7 @@ var providers = [
 		folder: 'bitbucket',
 		lineUrl: (file, line) => `https://bitbucket.org/user/repo-name/src/test-master/${file}#cl-${line}`,
 		fileUrl: (file) => `https://bitbucket.org/user/repo-name/src/test-master/${file}`,
+		repoUrl: () => `https://bitbucket.org/user/repo-name/src/test-master`
 	},
 	{
 		folder: 'visualstudio',
